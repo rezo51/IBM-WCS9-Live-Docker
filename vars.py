@@ -38,13 +38,13 @@ ibm_db2 = "ubuntu/db2:11.1"
 
 ##### Define db2 vars
 
-db2_srv = "db"			#Serveur db2 
+db2_srv = "db"
 db2_port = "50000"
 db2_admin = "db2inst1" 
 db2_admin_pwd = ""
 db2_user = "wcs"
 db2_user_pwd = ""
-db2_db = ""			#NE PAS MODIFIER
+db2_db = "mall"			
 
 
 ##### Define SPIUSER Password 
