@@ -1,0 +1,256 @@
+version: "2.1"
+services:
+#####################################################################################################################
+# The following section is for the database Docker image, assuming that you are using a database running inside a Docker container            
+#image: The URL and tag to the database Docker image.                                                                       
+#hostname: A name for the database container.                                                                       
+#ports: Database port 500000 is needed to communicate with the other containers. Do not change the database port.   
+#privileged: Gives extended priveleges to this container, which is needed to communicate with other containers.     
+#LICENSE: Specify 'LICENSE=accept' to accept the terms and agreements and gain access to download             
+#         the necessary Docker images.                                                                               
+#TZ: The time zone.                                                                                                 
+#####################################################################################################################
+  db:
+    image: image_db2
+    hostname: db
+    privileged: true
+    environment:
+      - DB2INST1_PASSWORD=
+    volumes:
+      - /docker/db2/share:/share
+    command: start
+    ports:
+      - 50000:50000
+    healthcheck:
+      test: exit 0
+
+#########################################################################################################
+# The following section is for the transaction Docker image                                             
+#image: The URL and tag to the transaction Docker image.                                                        
+#hostname: A name for the transaction server container.                                                 
+#ports: Ports exported by transaction server. Port 5443 is SSL port.                                   
+#LICENSE: Specify 'LICENSE=accept' to accept the terms and agreements and gain access to download 
+#          the necessary Docker images.                                                                 
+#TZ: The time zone.       
+#adminPassword: The password for user configadmin, which is used to access the WebSphere Application Server Administrative Console  
+#   If you omit adminPassword, then the default password is config1admin                                                                                
+#depends_on: The app container depends on the db container. The db container must be running                   
+#            for the app container to start.     
+#MERCHANTKEY_ENCRYPT: The encrypted merchant key that you created when you loaded the database schema. 
+#                     Merchant key is needed to decrypt the data read from the database. 
+#SPIUSER_NAME: The spiuser name which you used to init database instance
+#SPIUSER_PWD:  The spiuser password encrypted by using wcs_encrypt.sh. The value of plain text password be used to init database instance                                             
+#DBHOST:       The database hostname. IF you use the database as container. the hostname is the service name of your container defined in docker-compose
+#DBNAME:       The instance name of database
+#DBPORT:       The port of database
+#DBUSER:       The dbuser of database ( this is not the database admin user)
+#DBPASS:       The plain text of password of database                                                       
+#########################################################################################################
+  txn:
+    image: image_ts_app
+    hostname: txn
+    environment:
+      - LICENSE=accept
+      - TZ=Paris/France
+      - adminPassword=
+      - SPIUSER_NAME=
+      - SPIUSER_PWD=
+      - MERCHANTKEY_ENCRYPT=  
+      - DBHOST=
+      - DBNAME=
+      - DBPORT=
+      - DBUSER=
+      - DBPASS=
+    ports:
+      - 5080:5080
+      - 5443:5443
+      - 9060:9060
+      - 9043:9043
+    networks:
+      default:
+        aliases:
+          - app
+    depends_on:
+      db:
+        condition: service_started
+    healthcheck:
+      test: curl -f http://localhost:5080/wcs/resources/health/ping
+      interval: 10s
+      retries: 50
+      
+##################################################################################################################################
+# The following section is for the web Docker image                                                                              
+#image: The URL and tag to the web server Docker image.                                                                                  
+#hostname: A name for the web server container.                                                                                  
+#ports: Ports exported by web server. All ports are SSL ports.                                                                   
+#LICENSE: Specify 'LICENSE=accept' to accept the terms and agreements and gain access to use the Docker images.   
+#TZ: The time zone.                                                                                                              
+#depends_on: The web container depends on the txn container. The app container must be running for the web container to start.   
+
+#IF use local store, please add below additional port mapping on 80 and 443
+#ports:
+#  - 80:80
+#  - 443:443
+
+#IF want to do integration use old transaction service ( on V7 / V8 ), please add additional port mapping on 8006 and 8007
+#  - 8006:8006
+#  - 8007:8007
+##################################################################################################################################
+  web:
+    image: image_web
+    hostname: web
+    environment:
+      - LICENSE=accept
+      - TZ=Paris/France
+    ports:
+      - 8000-8002:8000-8002
+      - 8004:8004
+    depends_on:
+      txn:
+        condition: service_healthy
+    healthcheck:
+      test: exit 0
+   
+
+#########################################################################################################
+# The following section is for the search Docker image                                                  
+#image: The URL and tag to the search Docker image.                                                             
+#hostname: A name for the search server container.                                                      
+#ports: Ports exported by search server. Port 3738 is SSL port.                                         
+#environment: Specify the type of search node for this search container. Valid values are:              
+# A) For search master:                                                                                
+#             - SOLR_MASTER="True"                                                                      
+#             - SOLR_SLAVE=false                                                                        
+# B) For search repeater:                                                                               
+#             - SOLR_MASTER="True"                                                                      
+#             - SOLR_SLAVE="True"                                                                       
+# C) For search slave:                                                                                  
+#             - SOLR_MASTER=false                                                                       
+#             - SOLR_SLAVE="True"                                                                       
+#LICENSE: Specify 'LICENSE=accept' to accept the terms and agreements and gain access to download 
+#         the necessary Docker images.                                                                  
+#TZ: The time zone.                                                                                     
+#depends_on: The search container depends on the db container. The db container must be running         
+#            for the search container to start. 
+#SPIUSER_NAME: The spiuser name which you used to init database instance
+#SPIUSER_PWD:  The spiuser password encrypted by using wcs_encrypt.sh. The value of plain text password be used to init database instance                                             
+#DBHOST:       The database hostname. IF you use the database as container. the hostname is the service name of your container defined in docker-compose
+#DBNAME:       The instance name of database
+#DBPORT:       The port of database
+#DBUSER:       The dbuser of database ( this is not the database admin user)
+#DBPASS:       The plain text of password of database  
+#healthcheck: Checks the health of Search server. 
+#BASE64_ENCRYPTED_SPIUSER_PASSWORD  
+#    1. run the following command: echo "spiuser:<plain text spiuser password>" | base64
+#    2. use the output value to replace <BASE64_ENCRYPTED_SPIUSER_PASSWORD>                                                
+#########################################################################################################
+  search:
+    image: image_search_app
+    hostname: search
+    environment:
+      - SOLR_MASTER=true
+      - SOLR_SLAVE=false
+      - WORKAREA=/search
+      - LICENSE=accept
+      - TZ=Paris/France
+      - SPIUSER_NAME=
+      - SPIUSER_PWD=
+      - DBHOST=
+      - DBNAME=
+      - DBPORT=
+      - DBUSER=
+      - DBPASS=
+    ports:
+      - 3737:3737
+      - 3738:3738
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-H", 
+             "Authorization: Basic <ENCRYPTED_SPIUSER_PASSWORD_BAS64>",
+             "http://localhost:3737/search/admin/resources/health/ping"]
+      
+
+#########################################################################################################
+# The following section is for the Store Docker image                                                   
+#image: The URL and tag to the store Docker image.                                                              
+#hostname: A name for the store server container.                                                       
+#ports: Ports exported by store server. Port 8443 is SSL port.                                          
+#LICENSE: Specify 'LICENSE=accept' to accept the terms and agreements and gain access to          
+#         download the necessary Docker images.  
+#SPIUSER_NAME: The spiuser name which you used to init database instance
+#SPIUSER_PWD:  The spiuser password encrypted by using wcs_encrypt.sh. The value of plain text password be used to init database instance                                                                                                    
+#TZ: The time zone.                                                                                     
+#depends_on: The store container depends on the app container and search container.                     
+#            The app and search containers must be running for the store container to start.            
+#########################################################################################################
+  store:
+    image: image_crs_app
+    hostname: store
+    environment:
+      - LICENSE=accept
+      - TZ=Paris/France
+      - SPIUSER_NAME=
+      - SPIUSER_PWD=
+    ports:
+      - 8080:8080
+      - 8443:8443
+    depends_on:
+      txn:
+        condition: service_healthy
+      search:
+        condition: service_healthy
+    healthcheck:
+      test: curl -f http://localhost:8080/wcs/HealthCheck.jsp
+
+
+#################################################################################################################################
+# The following section is for the Customization server Docker image                                                            
+#image: The URL and tag to the utilities Docker image.                                                                                  
+#hostname: A name for the customizationtainer.                                                                                                                                                                 
+#LICENSE: Specify 'LICENSE=accept' to accept the terms and agreements and gain access to use the Docker images.   
+#TZ: The time zone.                                                
+#ports: Ports exported by customization container. 
+#SPIUSER_NAME: The spiuser name which you used to init database instance
+#SPIUSER_PWD:  The spiuser password encrypted by using wcs_encrypt.sh. The value of plain text password be used to init database instance                                              
+#################################################################################################################################      
+  xc:
+    image: image_xc_app
+    hostname: xc
+    environment:
+      - LICENSE=accept
+      - TZ=Paris/France
+      - SPIUSER_NAME=
+      - SPIUSER_PWD=
+    ports:
+      - "9080:9080"
+      - "9443:9443"      
+
+#################################################################################################################################
+# The following section is for the utilities Docker image                                                                       
+#image: The URL and tag to the utilities Docker image.                                                                                  
+#hostname: A name for the utilities container.                                                                                  
+#LICENSE: Specify 'LICENSE=accept' to accept the terms and agreements and gain access to use the Docker images.  
+#DBHOST: The database host. 
+#DBNAME: Database name.
+#DBPORT: Port exported by the database server.
+#DBUSER: The database user name.
+#DBADMIN: The database administrator user name.                                                                            
+#tty: Connects a pseudo terminal to access the utilities inside the container.                                                  
+#################################################################################################################################
+  utils:
+    image: image_utils
+    hostname: utils
+    environment:
+      - LICENSE=accept
+      - DBHOST=
+      - DBNAME=
+      - DBPORT=
+      - DBUSER=
+      - DBADMIN=
+      - ENABLE_DB_SSL=false
+    tty: true
+    healthcheck:
+      test: exit 0
+
